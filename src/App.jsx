@@ -5,11 +5,14 @@ import LoginPage from './pages/LoginPage';
 import { fetchBusinessPartnerByCardCode } from './services/sapServiceLayer';
 import './styles/dashboard.css';
 
+const SESSION_STORAGE_KEY = 'customerPortalSession';
+
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const storedSession = readStoredSession();
+  const [isAuthenticated, setIsAuthenticated] = useState(Boolean(storedSession));
   const [openMenus, setOpenMenus] = useState({ 'Partner Program': true });
   const [pathname, setPathname] = useState(window.location.pathname);
-  const [dashboardData, setDashboardData] = useState(portalData);
+  const [dashboardData, setDashboardData] = useState(storedSession?.dashboardData ?? portalData);
   const [credentials, setCredentials] = useState({
     email: '',
     password: '',
@@ -59,6 +62,7 @@ function App() {
 
     if (email === 'sales@sohostore.com' && password === 'portal123') {
       setLoginError('');
+      persistSession(portalData);
       setIsAuthenticated(true);
       window.history.pushState({}, '', '/dashboard');
       setPathname('/dashboard');
@@ -74,7 +78,9 @@ function App() {
 
     try {
       const businessPartner = await fetchBusinessPartnerByCardCode(cardCode);
-      setDashboardData(buildDashboardDataFromBusinessPartner(businessPartner));
+      const nextDashboardData = buildDashboardDataFromBusinessPartner(businessPartner);
+      setDashboardData(nextDashboardData);
+      persistSession(nextDashboardData);
       setLoginError('');
       setIsAuthenticated(true);
       window.history.pushState({}, '', '/dashboard');
@@ -84,6 +90,19 @@ function App() {
     } finally {
       setIsAuthenticating(false);
     }
+  }
+
+  function handleLogout() {
+    localStorage.removeItem(SESSION_STORAGE_KEY);
+    setCredentials({
+      email: '',
+      password: '',
+    });
+    setDashboardData(portalData);
+    setLoginError('');
+    setIsAuthenticated(false);
+    window.history.pushState({}, '', '/');
+    setPathname('/');
   }
 
   if (!isAuthenticated || pathname === '/') {
@@ -111,11 +130,32 @@ function App() {
       navigation={dashboardData.navigation}
       openMenus={openMenus}
       setOpenMenus={setOpenMenus}
+      onLogout={handleLogout}
     />
   );
 }
 
 export default App;
+
+function readStoredSession() {
+  try {
+    const session = localStorage.getItem(SESSION_STORAGE_KEY);
+    return session ? JSON.parse(session) : null;
+  } catch {
+    localStorage.removeItem(SESSION_STORAGE_KEY);
+    return null;
+  }
+}
+
+function persistSession(dashboardData) {
+  localStorage.setItem(
+    SESSION_STORAGE_KEY,
+    JSON.stringify({
+      dashboardData,
+      loggedInAt: new Date().toISOString(),
+    }),
+  );
+}
 
 function buildSummaryCards(summary) {
   return [

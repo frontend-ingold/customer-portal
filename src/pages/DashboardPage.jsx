@@ -49,6 +49,7 @@ export default function DashboardPage({
   navigation,
   openMenus,
   setOpenMenus,
+  onLogout,
 }) {
   const [activeStatusIndex, setActiveStatusIndex] = useState(null);
   const maxSalesValue = Math.max(...salesSeries.values, 0);
@@ -123,7 +124,12 @@ export default function DashboardPage({
                   key={item.label}
                   className={`nav-item ${item.active ? 'is-active' : ''}`}
                   href="/"
-                  onClick={(event) => event.preventDefault()}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    if (item.label === 'Logout') {
+                      onLogout();
+                    }
+                  }}
                 >
                   <Icon />
                   <span>{item.label}</span>
