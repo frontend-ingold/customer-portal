@@ -1,0 +1,45 @@
+<svg width="420" height="260" viewBox="0 0 420 260" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="redGlow" x1="96" y1="18" x2="170" y2="124" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF4D6D"/>
+      <stop offset="1" stop-color="#FF8A00"/>
+    </linearGradient>
+    <linearGradient id="yellowGlow" x1="138" y1="118" x2="270" y2="98" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFB800"/>
+      <stop offset="1" stop-color="#D5F200"/>
+    </linearGradient>
+    <linearGradient id="blueGlow" x1="205" y1="120" x2="325" y2="212" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#52D681"/>
+      <stop offset="0.48" stop-color="#3AA8FF"/>
+      <stop offset="1" stop-color="#A73BFF"/>
+    </linearGradient>
+    <linearGradient id="customerText" x1="106" y1="188" x2="311" y2="188" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1D5E9B"/>
+      <stop offset="1" stop-color="#143A6B"/>
+    </linearGradient>
+    <linearGradient id="portalText" x1="164" y1="230" x2="257" y2="230" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8C73FF"/>
+      <stop offset="1" stop-color="#B08CFF"/>
+    </linearGradient>
+    <filter id="softGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="12" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <g filter="url(#softGlow)" opacity="0.94">
+    <path d="M149 39C124 44 102 67 105 98C112 81 124 68 139 61C153 54 172 52 184 60C197 70 198 89 190 105C177 132 154 146 139 169C126 189 126 209 141 224C133 205 138 189 152 176C167 163 188 153 203 131C215 114 223 91 216 69C209 47 188 35 149 39Z" fill="url(#redGlow)"/>
+    <path d="M132 178C172 148 227 124 292 95C316 84 342 73 361 60C346 89 319 110 286 126C250 144 206 155 175 174C156 186 146 199 145 218C137 207 134 194 132 178Z" fill="url(#yellowGlow)"/>
+    <path d="M180 214C157 204 158 180 179 164C198 150 228 138 265 128C299 118 337 108 390 99C372 117 361 132 349 147C333 168 318 190 292 208C257 232 212 229 180 214Z" fill="url(#blueGlow)"/>
+  </g>
+
+  <text x="210" y="196" text-anchor="middle" fill="url(#customerText)" font-family="Instrument Sans, Arial, sans-serif" font-size="44" font-weight="800" letter-spacing="2">
+    CUSTOMER
+  </text>
+  <text x="210" y="232" text-anchor="middle" fill="url(#portalText)" font-family="Instrument Sans, Arial, sans-serif" font-size="26" font-weight="700" letter-spacing="10">
+    PORTAL
+  </text>
+</svg>
