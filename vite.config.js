@@ -10,6 +10,21 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       },
+      '/b1i': {
+        target: 'http://51.103.23.201:8080',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/b1i/, ''),
+      },
+      '/graphql': {
+        target: 'https://biancoevento.com',
+        changeOrigin: true,
+        secure: true,
+      },
+      '/rest': {
+        target: 'https://bianco-app.ingold-dev.com',
+        changeOrigin: true,
+        secure: true,
+      },
     },
   },
 });

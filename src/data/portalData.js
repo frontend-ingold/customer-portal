@@ -8,8 +8,9 @@ export const portalData = {
   company: {
     name: 'Soho Store',
     customerId: '10025',
-    email: 'sales@sohostore.com',
+    email: '',
     phone: '+1 (212) 555-0198',
+    currency: 'USD',
     vat: 'US123456789',
     address: '123 Fashion Ave, New York, NY 10001, USA',
   },
@@ -118,6 +119,26 @@ export const portalData = {
     { id: '#ORD-10043', date: 'May 17, 2025', status: 'Shipped', statusClass: 'shipped', amount: '$820.50' },
     { id: '#ORD-10042', date: 'May 15, 2025', status: 'Delivered', statusClass: 'delivered', amount: '$620.10' },
     { id: '#ORD-10041', date: 'May 12, 2025', status: 'Delivered', statusClass: 'delivered', amount: '$430.80' },
+  ],
+  shipments: [
+    {
+      shipmentNoSap: '26300021',
+      orderNoOnline: '001120023',
+      orderNoSap: '_',
+      shippingCarrier: 'ups',
+      trackingNo: '-',
+      shipmentDate: '2026-12-01',
+      total: '$282.97',
+    },
+    {
+      shipmentNoSap: '26300001',
+      orderNoOnline: '001120023',
+      orderNoSap: '_',
+      shippingCarrier: 'ups',
+      trackingNo: '-',
+      shipmentDate: '2026-12-01',
+      total: '$282.97',
+    },
   ],
   orderedProducts: [
     { name: 'Sardinia C36', sku: 'SAR-C36', amount: '$620.00', orderedOn: 'May 17, 2025', tone: 'tone-peach' },

@@ -16,6 +16,9 @@ import {
   ViewIcon,
 } from '../components/Icons';
 import customerPortalLogo from '../assets/customer-portal-logo.svg';
+import CompanyPage from './MyCompanyPage';
+import MyOrdersPage from './MyOrdersPage';
+import MyShipmentsPage from './MyShipmentsPage';
 
 const navIcons = {
   dashboard: DashboardIcon,
@@ -44,15 +47,21 @@ export default function DashboardPage({
   salesSeries,
   statusDistribution,
   recentOrders,
+  shipments,
   orderedProducts,
   credit,
   navigation,
   openMenus,
   setOpenMenus,
+  currentPath,
+  onNavigate,
   onLogout,
 }) {
   const [activeStatusIndex, setActiveStatusIndex] = useState(null);
-  const maxSalesValue = Math.max(...salesSeries.values, 0);
+  const [activeProductIndex, setActiveProductIndex] = useState(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const maxSalesValue = Math.max(...salesSeries.values, 1);
+  const valueTicks = buildValueTicks(maxSalesValue);
   const totalStatusCount = statusDistribution.reduce(
     (sum, item) => sum + item.count,
     0,
@@ -60,10 +69,20 @@ export default function DashboardPage({
   const pieSlices = buildPieSlices(statusDistribution);
   const activeStatus =
     activeStatusIndex === null ? null : (pieSlices[activeStatusIndex] ?? null);
+  const activeProduct =
+    activeProductIndex === null
+      ? null
+      : {
+          label: salesSeries.labels[activeProductIndex],
+          name: salesSeries.names?.[activeProductIndex],
+          value: salesSeries.values[activeProductIndex],
+          xPercent: getQuantityPercent(salesSeries.values[activeProductIndex], maxSalesValue),
+          yPercent: getProductRowPercent(activeProductIndex, salesSeries.labels.length),
+        };
 
   return (
     <div className="portal-shell">
-      <aside className="sidebar">
+      <aside className={`sidebar ${isMobileMenuOpen ? 'is-mobile-open' : ''}`}>
         <div>
           <div className="brand-block">
             <img
@@ -71,6 +90,17 @@ export default function DashboardPage({
               src={customerPortalLogo}
               alt="Customer Portal"
             />
+            <button
+              type="button"
+              className="mobile-menu-toggle"
+              aria-label={isMobileMenuOpen ? 'Close menu' : 'Open menu'}
+              aria-expanded={isMobileMenuOpen}
+              onClick={() => setIsMobileMenuOpen((current) => !current)}
+            >
+              <span />
+              <span />
+              <span />
+            </button>
           </div>
 
           <nav className="sidebar-nav">
@@ -78,13 +108,15 @@ export default function DashboardPage({
               const Icon = navIcons[item.icon];
               const hasChildren = Boolean(item.children?.length);
               const isOpen = Boolean(openMenus[item.label]);
+              const itemPath = getNavPath(item.label);
+              const isActive = itemPath === currentPath;
 
               if (hasChildren) {
                 return (
                   <div key={item.label} className="nav-group">
                     <button
                       type="button"
-                      className={`nav-item nav-toggle ${item.active ? 'is-active' : ''}`}
+                      className={`nav-item nav-toggle ${isActive ? 'is-active' : ''}`}
                       onClick={() =>
                         setOpenMenus((current) => ({
                           ...current,
@@ -122,12 +154,19 @@ export default function DashboardPage({
               return (
                 <a
                   key={item.label}
-                  className={`nav-item ${item.active ? 'is-active' : ''}`}
+                  className={`nav-item ${isActive ? 'is-active' : ''}`}
                   href="/"
                   onClick={(event) => {
                     event.preventDefault();
                     if (item.label === 'Logout') {
                       onLogout();
+                      setIsMobileMenuOpen(false);
+                      return;
+                    }
+
+                    if (itemPath) {
+                      onNavigate(itemPath);
+                      setIsMobileMenuOpen(false);
                     }
                   }}
                 >
@@ -149,17 +188,37 @@ export default function DashboardPage({
             <button type="button">Contact Us</button>
           </div>
 
-          <div className="copyright">© 2025 Bianco Evento. All rights reserved.</div>
+          <div className="copyright">© 2026 Customer Portal. All rights reserved.</div>
         </div>
       </aside>
 
       <main className="dashboard">
+        {currentPath === '/company' ? (
+          <CompanyPage company={company} credit={credit} />
+        ) : currentPath === '/orders' ? (
+          <MyOrdersPage
+            orders={recentOrders}
+            currency={company.currency}
+            cardCode={company.customerId}
+          />
+        ) : currentPath === '/shipments' ? (
+          <MyShipmentsPage
+            shipments={shipments}
+            cardCode={company.customerId}
+            currency={company.currency}
+          />
+        ) : (
+          <>
         <header className="topbar">
           <div>
             <h1>
               Welcome back, {company.name} <span className="wave-hand">{'\u{1F44B}'}</span>
             </h1>
             <p>Here&apos;s what&apos;s happening with your account today.</p>
+          </div>
+          <div className="cardcode-badge">
+            <span>CardCode</span>
+            <strong>{company.customerId}</strong>
           </div>
         </header>
 
@@ -183,55 +242,72 @@ export default function DashboardPage({
         <section className="analytics-grid">
           <article className="panel chart-panel">
             <div className="panel-heading">
-              <h2>Sales Overview</h2>
+              <h2>Last 10 Ordered Products</h2>
             </div>
-            <div className="chart-legend">
-              <span className="legend-item">
-                <i className="solid-line" />
-                Static Sales Data
-              </span>
-            </div>
-            <div className="line-chart">
-              <div className="chart-y-axis">
-                {buildYAxisTicks(maxSalesValue).map((tick) => (
-                  <span key={tick}>{tick}</span>
+            
+            <div className="line-chart product-axis-chart">
+              <div className="product-y-axis">
+                {salesSeries.labels.map((label, index) => (
+                  <button
+                    type="button"
+                    key={`${label}-${index}`}
+                    className={index === activeProductIndex ? 'is-active' : ''}
+                    onMouseEnter={() => setActiveProductIndex(index)}
+                    onFocus={() => setActiveProductIndex(index)}
+                  >
+                    {label}
+                  </button>
                 ))}
               </div>
-              <div className="chart-stage">
-                {[...Array(6)].map((_, index) => (
-                  <div key={index} className="grid-line" />
-                ))}
-                <svg viewBox="0 0 560 240" preserveAspectRatio="none">
-                  <defs>
-                    <linearGradient id="salesFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="rgba(190, 86, 93, 0.26)" />
-                      <stop offset="100%" stopColor="rgba(190, 86, 93, 0.02)" />
-                    </linearGradient>
-                  </defs>
-                  <polyline
-                    fill="url(#salesFill)"
-                    stroke="none"
-                    points={`${buildAreaPoints(salesSeries.values, maxSalesValue)} 560,240 0,240`}
-                  />
-                  <polyline
-                    fill="none"
-                    stroke="#bb666f"
-                    strokeWidth="3"
-                    points={buildLinePoints(salesSeries.values, maxSalesValue)}
-                  />
-                  {salesSeries.values.map((value, index) => (
-                    <circle
-                      key={`value-${salesSeries.labels[index]}`}
-                      cx={getX(index, salesSeries.labels.length)}
-                      cy={getY(value, maxSalesValue)}
-                      r="4"
-                      fill="#bb666f"
-                    />
+              <div
+                className={`chart-stage horizontal-products-stage ${activeProduct ? 'has-active-product' : ''}`}
+                onMouseLeave={() => setActiveProductIndex(null)}
+              >
+                <div className="quantity-grid" aria-hidden="true">
+                  {valueTicks.map((tick) => (
+                    <span key={tick} style={{ left: `${getQuantityPercent(tick, maxSalesValue)}%` }} />
                   ))}
-                </svg>
-                <div className="chart-months">
-                  {salesSeries.labels.map((label) => (
-                    <span key={label}>{label}</span>
+                </div>
+                <div className="horizontal-bars">
+                  {salesSeries.values.map((value, index) => (
+                    <button
+                      type="button"
+                      key={`price-${salesSeries.labels[index]}-${index}`}
+                      className={`product-bar-row ${index === activeProductIndex ? 'is-active' : ''}`}
+                      onMouseEnter={() => setActiveProductIndex(index)}
+                      onFocus={() => setActiveProductIndex(index)}
+                    >
+                      <span className="product-bar-track">
+                        <span
+                          className="product-bar-fill"
+                          style={{
+                            width: `${getQuantityPercent(value, maxSalesValue)}%`,
+                            animationDelay: `${160 + (index * 70)}ms`,
+                          }}
+                        />
+                      </span>
+                      <span className="product-bar-value">
+                        {formatSeriesValue(value, salesSeries)}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                {activeProduct ? (
+                  <div
+                    className="top-products-tooltip"
+                    style={{
+                      left: `calc(${activeProduct.xPercent}% - ${(activeProduct.xPercent / 100) * 48}px)`,
+                      top: `${activeProduct.yPercent}%`,
+                    }}
+                  >
+                    <strong>{activeProduct.label}</strong>
+                    {activeProduct.name ? <span>{activeProduct.name}</span> : null}
+                    <span>Price: {formatSeriesValue(activeProduct.value, salesSeries)}</span>
+                  </div>
+                ) : null}
+                <div className="chart-x-axis">
+                  {valueTicks.map((tick) => (
+                    <span key={tick}>{formatSeriesValue(tick, salesSeries)}</span>
                   ))}
                 </div>
               </div>
@@ -240,7 +316,7 @@ export default function DashboardPage({
 
           <article className="panel donut-panel">
             <div className="panel-heading">
-              <h2>Order Status Distribution</h2>
+              <h2>Top 10 Ordered Products</h2>
             </div>
             <div className="donut-wrap">
               <div
@@ -248,7 +324,7 @@ export default function DashboardPage({
                 onMouseLeave={() => setActiveStatusIndex(null)}
               >
                 <div className="donut-chart">
-                  <svg viewBox="0 0 220 220" className="pie-chart-svg" aria-label="Order status distribution">
+                  <svg viewBox="0 0 220 220" className="pie-chart-svg" aria-label="Top 10 ordered products quantity distribution">
                     {pieSlices.map((item, index) => (
                       <path
                         key={item.label}
@@ -305,7 +381,13 @@ export default function DashboardPage({
           <article className="panel orders-panel">
             <div className="panel-heading">
               <h2>Recent Orders</h2>
-              <a href="/" onClick={(event) => event.preventDefault()}>
+              <a
+                href="/orders"
+                onClick={(event) => {
+                  event.preventDefault();
+                  onNavigate('/orders');
+                }}
+              >
                 View all orders
               </a>
             </div>
@@ -346,13 +428,11 @@ export default function DashboardPage({
           <article className="panel products-panel">
             <div className="panel-heading">
               <h2>Last Ordered Products</h2>
-              <a href="/" onClick={(event) => event.preventDefault()}>
-                View all products
-              </a>
+             
             </div>
             <div className="product-list">
               {orderedProducts.map((product) => (
-                <div key={product.name} className="product-row">
+                <div key={product.id || product.name} className="product-row">
                   <a
                     className="product-thumb-link"
                     href={product.productUrl}
@@ -383,28 +463,39 @@ export default function DashboardPage({
           <article className="panel company-panel">
             <div className="panel-heading">
               <h2>Company Details</h2>
-              <button type="button">Edit</button>
             </div>
             <div className="company-body">
-              <div className="company-icon">
-                <BuildingIcon />
-              </div>
               <div className="company-columns">
                 <div>
                   <label>Company Name</label>
                   <p>{company.name}</p>
-                  <label>Customer ID</label>
-                  <p>{company.customerId}</p>
-                  <label>Email</label>
-                  <p>{company.email}</p>
+                  <label>Phone</label>
+                  <p>{company.phone || '-'}</p>
+                  <label>Sales Employee</label>
+                  <p>{company.salesEmployee || '-'}</p>
+                  <label>Sales Employee Email</label>
+                  <p>{company.salesEmployeeEmail || '-'}</p>
                 </div>
                 <div>
-                  <label>Phone</label>
-                  <p>{company.phone}</p>
-                  <label>VAT Number</label>
-                  <p>{company.vat}</p>
-                  <label>Address</label>
-                  <p>{company.address}</p>
+                  <label>Sales Employee Phone</label>
+                  <p>{company.salesEmployeePhone || '-'}</p>
+                  <label>Contact Persons</label>
+                  <div className="company-contact-list">
+                    {company.contactPersons?.length ? (
+                      company.contactPersons.map((contact) => (
+                        <p key={`${contact.name}-${contact.email}`}>
+                          <span>{contact.name}</span>
+                          <span>{contact.email}</span>
+                        </p>
+                      ))
+                    ) : (
+                      <p>-</p>
+                    )}
+                  </div>
+                  <label>Shipping Type</label>
+                  <p className="shipping-type">
+                    <span>{company.shippingType || '-'}</span>
+                  </p>
                 </div>
               </div>
             </div>
@@ -420,46 +511,81 @@ export default function DashboardPage({
             </div>
           </article>
         </section>
+          </>
+        )}
       </main>
     </div>
   );
 }
 
-function buildLinePoints(values, maxValue) {
-  return values
-    .map((value, index) => `${getX(index, values.length)},${getY(value, maxValue)}`)
-    .join(' ');
-}
-
-function buildAreaPoints(values, maxValue) {
-  return values
-    .map((value, index) => `${getX(index, values.length)},${getY(value, maxValue)}`)
-    .join(' ');
-}
-
-function getX(index, total) {
-  if (total <= 1) {
-    return 0;
+function getNavPath(label) {
+  if (label === 'Dashboard') {
+    return '/dashboard';
   }
 
-  return (560 / (total - 1)) * index;
+  if (label === 'My Company') {
+    return '/company';
+  }
+
+  if (label === 'My Orders') {
+    return '/orders';
+  }
+
+  if (label === 'My Shipments') {
+    return '/shipments';
+  }
+
+  return '';
 }
 
-function getY(value, maxValue) {
-  const minY = 24;
-  const maxY = 216;
-  return maxY - ((value / maxValue) * (maxY - minY));
-}
-
-function buildYAxisTicks(maxValue) {
+function buildValueTicks(maxValue) {
   const step = Math.max(1, Math.ceil(maxValue / 5));
   const ticks = [];
 
-  for (let tick = step * 5; tick >= 0; tick -= step) {
+  for (let tick = 0; tick <= step * 5; tick += step) {
     ticks.push(tick);
   }
 
   return ticks;
+}
+
+function formatSeriesValue(value, series) {
+  if (series.metric !== 'price') {
+    return value;
+  }
+
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: series.currency || 'USD',
+      maximumFractionDigits: 0,
+    }).format(value ?? 0);
+  } catch {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      maximumFractionDigits: 0,
+    }).format(value ?? 0);
+  }
+}
+
+function getQuantityPercent(value, maxValue) {
+  return maxValue ? Math.min(100, (value / maxValue) * 100) : 0;
+}
+
+function getProductRowPercent(index, total) {
+  if (total <= 1) {
+    return 50;
+  }
+
+  const rowHeight = 18;
+  const rowGap = 8;
+  const topPadding = 8;
+  const bottomPadding = 30;
+  const chartHeight = topPadding + (total * rowHeight) + ((total - 1) * rowGap) + bottomPadding;
+  const rowCenter = topPadding + (index * (rowHeight + rowGap)) + (rowHeight / 2);
+
+  return (rowCenter / chartHeight) * 100;
 }
 
 function buildPieSlices(items) {

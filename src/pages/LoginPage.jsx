@@ -105,7 +105,7 @@ export default function LoginPage({
                   name="email"
                   value={credentials.email}
                   onChange={onChange}
-                  placeholder="sales@sohostore.com"
+                  placeholder="email"
                   autoComplete="email"
                 />
               </label>
@@ -136,7 +136,7 @@ export default function LoginPage({
             </div>
           ) : (
             <div className="login-demo-note">
-              Demo credentials: <strong>sales@sohostore.com</strong> / <strong>portal123</strong>
+              {/* Demo credentials: <strong>sales@sohostore.com</strong> / <strong>portal123</strong> */}
             </div>
           )}
         </div>
