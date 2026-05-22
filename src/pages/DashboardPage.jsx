@@ -17,6 +17,7 @@ import {
 } from '../components/Icons';
 import customerPortalLogo from '../assets/customer-portal-logo.svg';
 import CompanyPage from './MyCompanyPage';
+import MyInvoicesPage from './MyInvoicesPage';
 import MyOrdersPage from './MyOrdersPage';
 import MyShipmentsPage from './MyShipmentsPage';
 
@@ -48,6 +49,7 @@ export default function DashboardPage({
   statusDistribution,
   recentOrders,
   shipments,
+  invoices,
   orderedProducts,
   credit,
   navigation,
@@ -204,6 +206,12 @@ export default function DashboardPage({
         ) : currentPath === '/shipments' ? (
           <MyShipmentsPage
             shipments={shipments}
+            cardCode={company.customerId}
+            currency={company.currency}
+          />
+        ) : currentPath === '/invoices' ? (
+          <MyInvoicesPage
+            invoices={invoices}
             cardCode={company.customerId}
             currency={company.currency}
           />
@@ -533,6 +541,10 @@ function getNavPath(label) {
 
   if (label === 'My Shipments') {
     return '/shipments';
+  }
+
+  if (label === 'My Invoices') {
+    return '/invoices';
   }
 
   return '';

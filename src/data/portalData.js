@@ -140,6 +140,28 @@ export const portalData = {
       total: '$282.97',
     },
   ],
+  invoices: [
+    {
+      invoiceId: '26900022',
+      orderIdOnline: '001120023',
+      date: '2026-12-01',
+      dueDate: '2026-11-02',
+      invoiceAmount: '$282.97',
+      paidAmount: '$282.97',
+      dueAmount: '$0.00',
+      status: 'Paid',
+    },
+    {
+      invoiceId: '26900001',
+      orderIdOnline: '001120023',
+      date: '2026-12-01',
+      dueDate: '2026-11-02',
+      invoiceAmount: '$282.97',
+      paidAmount: '$282.97',
+      dueAmount: '$0.00',
+      status: 'Paid',
+    },
+  ],
   orderedProducts: [
     { name: 'Sardinia C36', sku: 'SAR-C36', amount: '$620.00', orderedOn: 'May 17, 2025', tone: 'tone-peach' },
     { name: 'Star C38', sku: 'STR-C38', amount: '$540.00', orderedOn: 'May 19, 2025', tone: 'tone-bronze' },

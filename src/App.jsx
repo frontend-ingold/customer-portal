@@ -10,10 +10,12 @@ import {
   fetchOpenOrdersCountByCardCode,
   fetchRecentOrdersByCardCode,
   fetchTopOrderedProductsByCardCode,
+  isSessionExpiredError,
 } from './services/sapServiceLayer';
 import './styles/dashboard.css';
 
 const SESSION_STORAGE_KEY = 'customerPortalSession';
+const SESSION_EXPIRED_EVENT = 'customer-portal:session-expired';
 
 function App() {
   const [storedSession, setStoredSession] = useState(() => readStoredSession());
@@ -57,6 +59,15 @@ function App() {
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  useEffect(() => {
+    function handleSessionExpired() {
+      expireSession();
+    }
+
+    window.addEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
   }, []);
 
   useEffect(() => {
@@ -135,6 +146,10 @@ function App() {
           hasCompanyDetailsData(nextDashboardData.company) ? 'company-ready' : 'needs-company',
         ].join(':');
       } catch (error) {
+        if (isSessionExpiredError(error)) {
+          return;
+        }
+
         console.error('BusinessPartner refresh failed:', error);
       }
     }
@@ -230,6 +245,18 @@ function App() {
   }
 
   function handleLogout() {
+    clearSession();
+    window.history.pushState({}, '', '/');
+    setPathname('/');
+  }
+
+  function expireSession() {
+    clearSession();
+    window.history.replaceState({}, '', '/');
+    setPathname('/');
+  }
+
+  function clearSession() {
     localStorage.removeItem(SESSION_STORAGE_KEY);
     refreshedCardCodeRef.current = '';
     isCardLoginSubmittingRef.current = false;
@@ -241,8 +268,6 @@ function App() {
     setDashboardData(portalData);
     setLoginError('');
     setIsAuthenticated(false);
-    window.history.pushState({}, '', '/');
-    setPathname('/');
   }
 
   function handleNavigate(nextPath) {
@@ -271,6 +296,7 @@ function App() {
       statusDistribution={statusDistribution}
       recentOrders={dashboardData.recentOrders}
       shipments={dashboardData.shipments}
+      invoices={dashboardData.invoices}
       orderedProducts={orderedProducts}
       credit={dashboardData.credit}
       navigation={dashboardData.navigation}

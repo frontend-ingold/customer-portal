@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { CheckCircleIcon, ClockIcon, ViewIcon } from '../components/Icons';
-import { fetchOrdersByCardCode } from '../services/sapServiceLayer';
+import {
+  fetchOrderDetailsByDocNum,
+  fetchOrdersByCardCode,
+  isSessionExpiredError,
+} from '../services/sapServiceLayer';
 
 const PAGE_SIZE = 20;
 const SCROLL_LOAD_THRESHOLD = 320;
@@ -18,6 +22,7 @@ export default function MyOrdersPage({ orders = [], currency = 'USD', cardCode =
   const [hasMoreOrders, setHasMoreOrders] = useState(true);
   const [isLoadingOrders, setIsLoadingOrders] = useState(false);
   const [ordersError, setOrdersError] = useState('');
+  const [selectedOrder, setSelectedOrder] = useState(null);
   const nextSkipRef = useRef(0);
   const hasMoreOrdersRef = useRef(true);
   const isLoadingOrdersRef = useRef(false);
@@ -61,6 +66,13 @@ export default function MyOrdersPage({ orders = [], currency = 'USD', cardCode =
         updateHasMoreOrders(nextOrders.length === PAGE_SIZE);
       } catch (error) {
         if (isCurrent) {
+          if (isSessionExpiredError(error)) {
+            setLoadedOrders([]);
+            updateHasMoreOrders(false);
+            setOrdersError('');
+            return;
+          }
+
           setLoadedOrders([]);
           updateHasMoreOrders(false);
           setOrdersError(error.message || 'Unable to load orders.');
@@ -173,6 +185,12 @@ export default function MyOrdersPage({ orders = [], currency = 'USD', cardCode =
       updateNextSkip(currentSkip + nextOrders.length);
       updateHasMoreOrders(nextOrders.length === PAGE_SIZE);
     } catch (error) {
+      if (isSessionExpiredError(error)) {
+        setOrdersError('');
+        updateHasMoreOrders(false);
+        return;
+      }
+
       setOrdersError(error.message || 'Unable to load more orders.');
       updateHasMoreOrders(false);
     } finally {
@@ -225,6 +243,17 @@ export default function MyOrdersPage({ orders = [], currency = 'USD', cardCode =
     updateNextSkip(0);
     updateHasMoreOrders(true);
     scrollLoadArmedRef.current = true;
+  }
+
+  if (selectedOrder) {
+    return (
+      <OrderDetailsPage
+        key={selectedOrder.key}
+        order={selectedOrder}
+        currency={currency}
+        onBack={() => setSelectedOrder(null)}
+      />
+    );
   }
 
   return (
@@ -321,7 +350,11 @@ export default function MyOrdersPage({ orders = [], currency = 'USD', cardCode =
                     </span>
                   </td>
                   <td>
-                    <button className="orders-view-button" type="button">
+                    <button
+                      className="orders-view-button"
+                      type="button"
+                      onClick={() => setSelectedOrder(order)}
+                    >
                       <ViewIcon />
                       View
                     </button>
@@ -341,6 +374,378 @@ export default function MyOrdersPage({ orders = [], currency = 'USD', cardCode =
       </div>
     </div>
   );
+}
+
+function OrderDetailsPage({ order, currency, onBack }) {
+  const [apiOrderDetails, setApiOrderDetails] = useState(null);
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+  const [detailsError, setDetailsError] = useState('');
+  const detail = buildOrderDetails(order, apiOrderDetails, currency);
+  const shouldShowDetails = !isLoadingDetails || Boolean(apiOrderDetails) || Boolean(detailsError);
+
+  useEffect(() => {
+    let isCurrent = true;
+    const docNum = Number(order.sapId);
+
+    async function loadOrderDetails() {
+      if (!Number.isFinite(docNum) || docNum <= 0) {
+        return;
+      }
+
+      setIsLoadingDetails(true);
+      setDetailsError('');
+      setApiOrderDetails(null);
+
+      try {
+        const nextOrderDetails = await fetchOrderDetailsByDocNum(docNum);
+
+        if (isCurrent) {
+          setApiOrderDetails(nextOrderDetails);
+        }
+      } catch (error) {
+        if (isCurrent) {
+          if (isSessionExpiredError(error)) {
+            setApiOrderDetails(null);
+            setDetailsError('');
+            return;
+          }
+
+          setApiOrderDetails(null);
+          setDetailsError(error.message || 'Unable to load order details.');
+        }
+      } finally {
+        if (isCurrent) {
+          setIsLoadingDetails(false);
+        }
+      }
+    }
+
+    loadOrderDetails();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [order.sapId]);
+
+  return (
+    <div className="order-details-page">
+      <header className="order-details-hero">
+        <div className="order-hero-copy">
+          <button className="order-details-back-link" type="button" onClick={onBack}>
+            Back to orders
+          </button>
+          <h1>Order #{detail.sapId}</h1>
+          <p>Online order {detail.onlineId} - {detail.source}</p>
+        </div>
+        <div className="order-hero-meta">
+          <span>Order Date: {detail.orderDate}</span>
+          <strong>{detail.total}</strong>
+        </div>
+      </header>
+      {isLoadingDetails ? (
+        <div className="order-detail-message">Loading order details...</div>
+      ) : null}
+      {detailsError ? (
+        <div className="order-detail-message is-error">{detailsError}</div>
+      ) : null}
+
+      {shouldShowDetails ? (
+        <>
+          <section className="order-kpi-grid">
+            <div>
+              <span>Status</span>
+              <strong>{detail.status}</strong>
+            </div>
+            <div>
+              <span>Payment Method</span>
+              <strong>{detail.paymentMethod}</strong>
+            </div>
+            <div>
+              <span>Shipping Method</span>
+              <strong>{detail.shippingMethod}</strong>
+            </div>
+            <div>
+              <span>Delivery Date</span>
+              <strong>{detail.deliveryDate}</strong>
+            </div>
+          </section>
+
+          <section className="order-details-layout">
+            <article className="order-detail-card">
+              <div className="order-section-heading">
+                <h2>Items</h2>
+                <span>{detail.items.length} products</span>
+              </div>
+              <div className="order-items-table-wrap">
+                <table className="order-items-table">
+                  <thead>
+                    <tr>
+                      <th>Item Code</th>
+                      <th>Sku</th>
+                      <th>Price</th>
+                      <th>Qty</th>
+                      <th>Status</th>
+                      <th>Delivery Date</th>
+                      <th>Tax</th>
+                      <th>Subtotal</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detail.items.map((item) => (
+                      <tr key={item.itemCode}>
+                        <td>
+                          <strong>{item.itemCode}</strong>
+                          <span>{item.description}</span>
+                        </td>
+                        <td>{item.sku}</td>
+                        <td>{item.price}</td>
+                        <td>{item.quantity}</td>
+                        <td>
+                          <span className="order-line-status">{item.status}</span>
+                        </td>
+                        <td>{item.deliveryDate}</td>
+                        <td>{item.tax}</td>
+                        <td>{item.total}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </article>
+
+            <aside className="order-total-summary">
+              <h2>Totals</h2>
+              <div>
+                <span>Subtotal</span>
+                <strong>{detail.subtotal}</strong>
+              </div>
+              <div>
+                <span>Total Before Tax</span>
+                <strong>{detail.subtotal}</strong>
+              </div>
+              <div>
+                <span>Total Tax Amount</span>
+                <strong>{detail.tax}</strong>
+              </div>
+              <div className="order-grand-total">
+                <span>Grand Total</span>
+                <strong>{detail.total}</strong>
+              </div>
+            </aside>
+          </section>
+
+          <section className="order-info-panel">
+            <div className="order-section-heading">
+              <h2>Order Information</h2>
+              <span>Fulfillment details</span>
+            </div>
+            <div className="order-info-grid">
+              {detail.infoCards.map((card) => (
+                <article key={card.title}>
+                  <h3>{card.title}</h3>
+                  {card.lines.map((line) => (
+                    <p key={line}>{line}</p>
+                  ))}
+                </article>
+              ))}
+            </div>
+          </section>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function buildStaticOrderDetails(order, currency) {
+  const subtotalValue = 102.77;
+
+  return {
+    ...order,
+    subtotal: formatCurrency(subtotalValue, currency),
+    tax: formatCurrency(0, currency),
+    total: formatCurrency(subtotalValue, currency),
+    orderDate: '10/09/2025',
+    deliveryDate: '10/09/2025',
+    status: 'Closed',
+    paymentMethod: 'Invoice',
+    shippingMethod: 'UPS Standard',
+    infoCards: [
+      {
+        title: 'Shipping Address',
+        lines: ['Bianco USA Magento', '5th avenue 123', 'Spring', '10011', 'United States'],
+      },
+      {
+        title: 'Billing Address',
+        lines: ['Bianco USA Magento', '5th avenue 123', 'New York', '125986', 'United States'],
+      },
+      {
+        title: 'Shipping Method',
+        lines: ['UPS Standard'],
+      },
+      {
+        title: 'Payment Method',
+        lines: ['Invoice'],
+      },
+    ],
+    items: [
+      {
+        itemCode: 'h 8 190 w xs',
+        sku: 'h 8 190 w xs',
+        description: 'Reifrock mit elastischem Bund, Umf. 190 cm, ein Reifen.',
+        price: formatCurrency(24.2, currency),
+        quantity: 2,
+        status: 'CLOSED',
+        deliveryDate: '10/09/2025',
+        tax: formatCurrency(0, currency),
+        total: formatCurrency(38.72, currency),
+      },
+      {
+        itemCode: 'star c 38',
+        sku: 'star c 38',
+        description: 'Brautschuhe der Marke AVALIA. Satin. Absatzhohe 6 cm',
+        price: formatCurrency(64.05, currency),
+        quantity: 1,
+        status: 'CLOSED',
+        deliveryDate: '10/09/2025',
+        tax: formatCurrency(0, currency),
+        total: formatCurrency(64.05, currency),
+      },
+    ],
+  };
+}
+
+function buildOrderDetails(order, apiOrderDetails, currency) {
+  if (!apiOrderDetails) {
+    return buildStaticOrderDetails(order, currency);
+  }
+
+  const detailCurrency = apiOrderDetails.DocCurrency || currency;
+  const docTotal = getNumber(apiOrderDetails.DocTotal);
+  const taxTotal = getNumber(apiOrderDetails.VatSum);
+  const subtotal = Math.max(docTotal - taxTotal, 0);
+  const addressExtension = apiOrderDetails.AddressExtension || {};
+  const documentLines = Array.isArray(apiOrderDetails.DocumentLines)
+    ? apiOrderDetails.DocumentLines
+    : [];
+  const fallbackDetails = buildStaticOrderDetails(order, detailCurrency);
+
+  return {
+    sapId: apiOrderDetails.DocNum || order.sapId,
+    onlineId: apiOrderDetails.NumAtCard || order.onlineId || '-',
+    source: order.source || 'Internet-Shop',
+    subtotal: formatCurrency(subtotal, detailCurrency),
+    tax: formatCurrency(taxTotal, detailCurrency),
+    total: formatCurrency(docTotal, detailCurrency),
+    orderDate: formatCompactDate(apiOrderDetails.DocDate),
+    deliveryDate: formatCompactDate(apiOrderDetails.DocDueDate),
+    status: normalizeStatus(apiOrderDetails.DocumentStatus).label,
+    paymentMethod: formatPaymentMethodName(apiOrderDetails.PaymentGroupCode),
+    shippingMethod: formatShippingMethod(apiOrderDetails.TransportationCode),
+    infoCards: [
+      {
+        title: 'Shipping Address',
+        lines: buildAddressLines(
+          addressExtension.ShipToStreet,
+          addressExtension.ShipToCity,
+          addressExtension.ShipToZipCode,
+          addressExtension.ShipToCountry,
+          apiOrderDetails.Address2,
+        ),
+      },
+      {
+        title: 'Billing Address',
+        lines: buildAddressLines(
+          addressExtension.BillToStreet,
+          addressExtension.BillToCity,
+          addressExtension.BillToZipCode,
+          addressExtension.BillToCountry,
+          apiOrderDetails.Address,
+        ),
+      },
+      {
+        title: 'Shipping Method',
+        lines: [formatShippingMethod(apiOrderDetails.TransportationCode)],
+      },
+      {
+        title: 'Payment Method',
+        lines: [formatPaymentMethodName(apiOrderDetails.PaymentGroupCode)],
+      },
+    ],
+    items: documentLines.length
+      ? documentLines.map((line, index) => normalizeOrderLine(line, index, detailCurrency, apiOrderDetails.DocDueDate))
+      : fallbackDetails.items,
+  };
+}
+
+function normalizeOrderLine(line, index, currency, fallbackDeliveryDate) {
+  const quantity = getNumber(line.Quantity);
+  const lineTotal = getNumber(line.LineTotal);
+  const taxTotal = getNumber(line.TaxTotal);
+  const price = getNumber(line.UnitPrice ?? line.Price);
+
+  return {
+    itemCode: line.ItemCode || `Line ${index + 1}`,
+    sku: line.ItemCode || '-',
+    description: line.ItemDescription || line.ItemCode || '-',
+    price: formatCurrency(price, currency),
+    quantity,
+    status: line.LineStatus === 'bost_Close' ? 'CLOSED' : 'OPEN',
+    deliveryDate: formatCompactDate(line.ShipDate || fallbackDeliveryDate),
+    tax: formatCurrency(taxTotal, currency),
+    total: formatCurrency(lineTotal, currency),
+  };
+}
+
+function buildAddressLines(street, city, zipCode, country, fallbackAddress) {
+  const structuredLines = [
+    street,
+    city,
+    zipCode,
+    country,
+  ].filter(Boolean);
+
+  if (structuredLines.length) {
+    return structuredLines;
+  }
+
+  if (!fallbackAddress) {
+    return ['-'];
+  }
+
+  return String(fallbackAddress)
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function formatShippingMethod(value) {
+  if (!value && value !== 0) {
+    return 'UPS Standard';
+  }
+
+  if (String(value) === '1') {
+    return 'UPS Standard';
+  }
+
+  return String(value);
+}
+
+function formatPaymentMethodName(value) {
+  if (!value && value !== 0) {
+    return 'Invoice';
+  }
+
+  const paymentMethodNames = {
+    '-1': 'Invoice',
+    1: 'Invoice',
+  };
+
+  return paymentMethodNames[String(value)] || 'Invoice';
+}
+
+function getNumber(value) {
+  const number = Number.parseFloat(value);
+  return Number.isFinite(number) ? number : 0;
 }
 
 function setOrderRowRef(key, node, rowRefs) {

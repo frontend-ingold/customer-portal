@@ -8,6 +8,9 @@ const OPEN_ORDERS_PATH =
   '/B1iXcellerator/exec/ipo/.DEV.IGS.GET_ALLSO_DETAIL.IGS.GET_ALLSO/com.sap.b1i.dev.scenarios.setup/IGS.GET_ALLSO_DETAIL/IGS.GET_ALLSO.ipo/GETALLSODETAIL.xxx.SalesOrder_HdrData';
 const TOP_PRODUCTS_PATH =
   '/B1iXcellerator/exec/ipo/.DEV.IGS.GET_ALLSO_DETAIL.IGS.GET_ALLSO/com.sap.b1i.dev.scenarios.setup/IGS.GET_ALLSO_DETAIL/IGS.GET_ALLSO.ipo/GETALLSODETAIL.xxx.TOP10_PRODUCT';
+const SESSION_EXPIRED_EVENT = 'customer-portal:session-expired';
+const INVALID_SESSION_MESSAGE = 'Invalid session or session already timeout.';
+const SESSION_EXPIRED_ERROR_NAME = 'SessionExpiredError';
 
 export async function fetchBusinessPartnerByCardCode(cardCode) {
   const normalizedCardCode = cardCode.trim();
@@ -247,10 +250,12 @@ export async function fetchOrdersByCardCode(cardCode, options = {}) {
   }
 
   if (!response.ok) {
+    await throwIfSessionExpiredResponse(response);
     throw new Error('Unable to load orders.');
   }
 
   const payload = await response.json();
+  throwIfSessionExpiredPayload(payload);
 
   return Array.isArray(payload.value)
     ? payload.value.map((order) => ({
@@ -271,6 +276,61 @@ export async function fetchOrdersByCardCode(cardCode, options = {}) {
       vatSum: Number.parseFloat(order.VatSum) || 0,
     }))
     : [];
+}
+
+export async function fetchOrderDetailsByDocNum(docNum) {
+  const normalizedDocNum = Number(docNum);
+
+  if (!Number.isFinite(normalizedDocNum) || normalizedDocNum <= 0) {
+    throw new Error('Order number is missing.');
+  }
+
+  const select = [
+    'DocEntry',
+    'DocNum',
+    'CardCode',
+    'CardName',
+    'DocDate',
+    'DocDueDate',
+    'NumAtCard',
+    'DocCurrency',
+    'DocTotal',
+    'VatSum',
+    'DocumentStatus',
+    'TransportationCode',
+    'PaymentGroupCode',
+    'Address',
+    'Address2',
+    'DocumentLines',
+    'AddressExtension',
+  ].join(',');
+  const query = new URLSearchParams({
+    $select: select,
+    $filter: `DocNum eq ${normalizedDocNum}`,
+  });
+  const requestUrl = `/b1s/v1/Orders?${query.toString()}`;
+  let response = await fetchServiceLayerRequest(requestUrl);
+
+  if (response.status === 401 || response.status === 403) {
+    await loginToSapServiceLayer();
+    response = await fetchServiceLayerRequest(requestUrl);
+  }
+
+  if (!response.ok) {
+    await throwIfSessionExpiredResponse(response);
+    throw new Error('Unable to load order details.');
+  }
+
+  const payload = await response.json();
+  throwIfSessionExpiredPayload(payload);
+
+  const order = Array.isArray(payload.value) ? payload.value[0] : null;
+
+  if (!order) {
+    throw new Error('Order details were not found.');
+  }
+
+  return order;
 }
 
 export async function fetchDeliveryNotesByCardCode(cardCode, options = {}) {
@@ -320,10 +380,12 @@ export async function fetchDeliveryNotesByCardCode(cardCode, options = {}) {
   }
 
   if (!response.ok) {
+    await throwIfSessionExpiredResponse(response);
     throw new Error('Unable to load shipments.');
   }
 
   const payload = await response.json();
+  throwIfSessionExpiredPayload(payload);
 
   return Array.isArray(payload.value)
     ? payload.value.map((deliveryNote) => ({
@@ -340,6 +402,202 @@ export async function fetchDeliveryNotesByCardCode(cardCode, options = {}) {
       comments: deliveryNote.Comments,
     }))
     : [];
+}
+
+export async function fetchDeliveryNoteDetailsByDocNum(docNum) {
+  const normalizedDocNum = Number(docNum);
+
+  if (!Number.isFinite(normalizedDocNum) || normalizedDocNum <= 0) {
+    throw new Error('Shipment number is missing.');
+  }
+
+  const select = [
+    'DocEntry',
+    'DocNum',
+    'CardCode',
+    'CardName',
+    'TransportationCode',
+    'DocDate',
+    'DocDueDate',
+    'NumAtCard',
+    'DocCurrency',
+    'DocTotal',
+    'VatSum',
+    'Comments',
+    'U_TRACKNO',
+    'Address',
+    'Address2',
+    'DocumentLines',
+    'AddressExtension',
+  ].join(',');
+  const query = new URLSearchParams({
+    $select: select,
+    $filter: `DocNum eq ${normalizedDocNum}`,
+  });
+  const requestUrl = `/b1s/v1/DeliveryNotes?${query.toString()}`;
+  let response = await fetchServiceLayerRequest(requestUrl);
+
+  if (response.status === 401 || response.status === 403) {
+    await loginToSapServiceLayer();
+    response = await fetchServiceLayerRequest(requestUrl);
+  }
+
+  if (!response.ok) {
+    await throwIfSessionExpiredResponse(response);
+    throw new Error('Unable to load shipment details.');
+  }
+
+  const payload = await response.json();
+  throwIfSessionExpiredPayload(payload);
+
+  const deliveryNote = Array.isArray(payload.value) ? payload.value[0] : null;
+
+  if (!deliveryNote) {
+    throw new Error('Shipment details were not found.');
+  }
+
+  return deliveryNote;
+}
+
+export async function fetchInvoicesByCardCode(cardCode, options = {}) {
+  const normalizedCardCode = cardCode.trim();
+
+  if (!normalizedCardCode) {
+    throw new Error('Enter a card code.');
+  }
+
+  const select = [
+    'DocEntry',
+    'DocNum',
+    'CardCode',
+    'CardName',
+    'DocDate',
+    'DocDueDate',
+    'NumAtCard',
+    'DocCurrency',
+    'DocTotal',
+    'PaidToDate',
+    'DocumentStatus',
+  ].join(',');
+  const filters = [`CardCode eq '${escapeODataValue(normalizedCardCode)}'`];
+
+  if (options.invoiceId) {
+    filters.push(`DocNum eq ${Number(options.invoiceId) || 0}`);
+  }
+
+  if (options.orderId) {
+    filters.push(`contains(NumAtCard,'${escapeODataValue(options.orderId.trim())}')`);
+  }
+
+  if (options.fromDate) {
+    filters.push(`DocDate ge '${options.fromDate}'`);
+  }
+
+  if (options.toDate) {
+    filters.push(`DocDate le '${options.toDate}'`);
+  }
+
+  if (options.status && options.status !== 'All') {
+    filters.push(`DocumentStatus eq '${options.status === 'Paid' ? 'bost_Close' : 'bost_Open'}'`);
+  }
+
+  const query = new URLSearchParams({
+    $select: select,
+    $filter: filters.join(' and '),
+    $orderby: 'DocEntry desc',
+  });
+  const requestUrl = `/b1s/v1/Invoices?${query.toString()}`;
+  let response = await fetchServiceLayerRequest(requestUrl);
+
+  if (response.status === 401 || response.status === 403) {
+    await loginToSapServiceLayer();
+    response = await fetchServiceLayerRequest(requestUrl);
+  }
+
+  if (!response.ok) {
+    await throwIfSessionExpiredResponse(response);
+    throw new Error('Unable to load invoices.');
+  }
+
+  const payload = await response.json();
+  throwIfSessionExpiredPayload(payload);
+
+  return Array.isArray(payload.value)
+    ? payload.value.map((invoice) => {
+      const docTotal = Number.parseFloat(invoice.DocTotal) || 0;
+      const paidToDate = Number.parseFloat(invoice.PaidToDate) || 0;
+
+      return {
+        invoiceId: invoice.DocNum,
+        docEntry: invoice.DocEntry,
+        cardCode: invoice.CardCode,
+        cardName: invoice.CardName,
+        orderIdOnline: invoice.NumAtCard,
+        date: invoice.DocDate,
+        dueDate: invoice.DocDueDate,
+        currency: invoice.DocCurrency,
+        invoiceAmount: docTotal,
+        paidAmount: paidToDate,
+        dueAmount: Math.max(docTotal - paidToDate, 0),
+        status: docTotal - paidToDate <= 0 ? 'Paid' : normalizeInvoiceDocumentStatus(invoice.DocumentStatus),
+      };
+    })
+    : [];
+}
+
+export async function fetchInvoiceDetailsByDocNum(docNum) {
+  const normalizedDocNum = Number(docNum);
+
+  if (!Number.isFinite(normalizedDocNum) || normalizedDocNum <= 0) {
+    throw new Error('Invoice number is missing.');
+  }
+
+  const select = [
+    'DocEntry',
+    'DocNum',
+    'CardCode',
+    'CardName',
+    'DocDate',
+    'DocDueDate',
+    'NumAtCard',
+    'DocCurrency',
+    'DocTotal',
+    'PaidToDate',
+    'VatSum',
+    'DocumentStatus',
+    'PaymentGroupCode',
+    'Address',
+    'Address2',
+    'DocumentLines',
+    'AddressExtension',
+  ].join(',');
+  const query = new URLSearchParams({
+    $select: select,
+    $filter: `DocNum eq ${normalizedDocNum}`,
+  });
+  const requestUrl = `/b1s/v1/Invoices?${query.toString()}`;
+  let response = await fetchServiceLayerRequest(requestUrl);
+
+  if (response.status === 401 || response.status === 403) {
+    await loginToSapServiceLayer();
+    response = await fetchServiceLayerRequest(requestUrl);
+  }
+
+  if (!response.ok) {
+    await throwIfSessionExpiredResponse(response);
+    throw new Error('Unable to load invoice details.');
+  }
+
+  const payload = await response.json();
+  throwIfSessionExpiredPayload(payload);
+
+  const invoice = Array.isArray(payload.value) ? payload.value[0] : null;
+
+  if (!invoice) {
+    throw new Error('Invoice details were not found.');
+  }
+
+  return invoice;
 }
 
 function escapeODataValue(value) {
@@ -369,6 +627,68 @@ function fetchServiceLayerRequest(requestUrl) {
       Accept: 'application/json',
     },
   });
+}
+
+async function throwIfSessionExpiredResponse(response) {
+  const payload = await parseJsonResponse(response);
+  throwIfSessionExpiredPayload(payload);
+}
+
+async function parseJsonResponse(response) {
+  try {
+    return await response.clone().json();
+  } catch {
+    return null;
+  }
+}
+
+function throwIfSessionExpiredPayload(payload) {
+  if (!isSessionExpiredPayload(payload)) {
+    return;
+  }
+
+  dispatchSessionExpired();
+  const error = new Error(INVALID_SESSION_MESSAGE);
+  error.name = SESSION_EXPIRED_ERROR_NAME;
+  throw error;
+}
+
+export function isSessionExpiredError(error) {
+  return error?.name === SESSION_EXPIRED_ERROR_NAME
+    || String(error?.message || '').toLowerCase() === INVALID_SESSION_MESSAGE.toLowerCase();
+}
+
+function isSessionExpiredPayload(payload) {
+  const error = payload?.error;
+  const message = error?.message?.value || error?.message || '';
+
+  const normalizedMessage = String(message).toLowerCase();
+
+  return Number(error?.code) === 301
+    && (
+      normalizedMessage.includes('invalid session')
+      || normalizedMessage.includes('session already timeout')
+    );
+}
+
+function dispatchSessionExpired() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
+}
+
+function normalizeInvoiceDocumentStatus(status) {
+  if (status === 'bost_Close' || status === 'Closed') {
+    return 'Paid';
+  }
+
+  if (status === 'bost_Open' || status === 'Open') {
+    return 'Open';
+  }
+
+  return status || 'Open';
 }
 
 export async function fetchOpenInvoicesCountByCardCode(cardCode) {
