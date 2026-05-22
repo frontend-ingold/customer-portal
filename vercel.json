@@ -1,0 +1,24 @@
+{
+  "rewrites": [
+    {
+      "source": "/b1s/:path*",
+      "destination": "https://51.103.23.201:50000/b1s/:path*"
+    },
+    {
+      "source": "/b1i/:path*",
+      "destination": "http://51.103.23.201:8080/:path*"
+    },
+    {
+      "source": "/graphql",
+      "destination": "https://biancoevento.com/graphql"
+    },
+    {
+      "source": "/rest/:path*",
+      "destination": "https://bianco-app.ingold-dev.com/rest/:path*"
+    },
+    {
+      "source": "/:path*",
+      "destination": "/index.html"
+    }
+  ]
+}

@@ -9,6 +9,7 @@ const OPEN_ORDERS_PATH =
 const TOP_PRODUCTS_PATH =
   '/B1iXcellerator/exec/ipo/.DEV.IGS.GET_ALLSO_DETAIL.IGS.GET_ALLSO/com.sap.b1i.dev.scenarios.setup/IGS.GET_ALLSO_DETAIL/IGS.GET_ALLSO.ipo/GETALLSODETAIL.xxx.TOP10_PRODUCT';
 const SESSION_EXPIRED_EVENT = 'customer-portal:session-expired';
+const SESSION_STORAGE_KEY = 'customerPortalSession';
 const INVALID_SESSION_MESSAGE = 'Invalid session or session already timeout.';
 const SESSION_EXPIRED_ERROR_NAME = 'SessionExpiredError';
 
@@ -660,15 +661,7 @@ export function isSessionExpiredError(error) {
 
 function isSessionExpiredPayload(payload) {
   const error = payload?.error;
-  const message = error?.message?.value || error?.message || '';
-
-  const normalizedMessage = String(message).toLowerCase();
-
-  return Number(error?.code) === 301
-    && (
-      normalizedMessage.includes('invalid session')
-      || normalizedMessage.includes('session already timeout')
-    );
+  return Number(error?.code) === 301;
 }
 
 function dispatchSessionExpired() {
@@ -676,7 +669,19 @@ function dispatchSessionExpired() {
     return;
   }
 
+  const shouldRedirect = window.location.pathname !== '/';
+
+  try {
+    window.localStorage.removeItem(SESSION_STORAGE_KEY);
+  } catch {
+    // Ignore storage access failures and still notify the app shell.
+  }
+
   window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
+
+  if (shouldRedirect) {
+    window.location.replace('/');
+  }
 }
 
 function normalizeInvoiceDocumentStatus(status) {
