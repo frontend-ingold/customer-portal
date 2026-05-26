@@ -297,6 +297,7 @@ function App() {
       recentOrders={dashboardData.recentOrders}
       shipments={dashboardData.shipments}
       invoices={dashboardData.invoices}
+      creditNotes={dashboardData.creditNotes}
       orderedProducts={orderedProducts}
       credit={dashboardData.credit}
       navigation={dashboardData.navigation}

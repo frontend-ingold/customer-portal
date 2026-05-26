@@ -17,6 +17,7 @@ import {
 } from '../components/Icons';
 import customerPortalLogo from '../assets/customer-portal-logo.svg';
 import CompanyPage from './MyCompanyPage';
+import MyCreditNotesPage from './MyCreditNotesPage';
 import MyInvoicesPage from './MyInvoicesPage';
 import MyOrdersPage from './MyOrdersPage';
 import MyShipmentsPage from './MyShipmentsPage';
@@ -50,6 +51,7 @@ export default function DashboardPage({
   recentOrders,
   shipments,
   invoices,
+  creditNotes,
   orderedProducts,
   credit,
   navigation,
@@ -212,6 +214,12 @@ export default function DashboardPage({
         ) : currentPath === '/invoices' ? (
           <MyInvoicesPage
             invoices={invoices}
+            cardCode={company.customerId}
+            currency={company.currency}
+          />
+        ) : currentPath === '/credit-notes' ? (
+          <MyCreditNotesPage
+            creditNotes={creditNotes}
             cardCode={company.customerId}
             currency={company.currency}
           />
@@ -545,6 +553,10 @@ function getNavPath(label) {
 
   if (label === 'My Invoices') {
     return '/invoices';
+  }
+
+  if (label === 'Credit Notes') {
+    return '/credit-notes';
   }
 
   return '';

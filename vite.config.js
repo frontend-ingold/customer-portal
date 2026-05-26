@@ -9,6 +9,11 @@ export default defineConfig({
         target: 'https://51.103.23.201:50000',
         changeOrigin: true,
         secure: false,
+        configure: (proxy) => {
+          proxy.on('proxyRes', (proxyRes) => {
+            delete proxyRes.headers['www-authenticate'];
+          });
+        },
       },
       '/b1i': {
         target: 'http://51.103.23.201:8080',

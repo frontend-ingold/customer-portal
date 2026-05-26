@@ -12,6 +12,8 @@ const SESSION_EXPIRED_EVENT = 'customer-portal:session-expired';
 const SESSION_STORAGE_KEY = 'customerPortalSession';
 const INVALID_SESSION_MESSAGE = 'Invalid session or session already timeout.';
 const SESSION_EXPIRED_ERROR_NAME = 'SessionExpiredError';
+let sapServiceLayerLoginPromise = null;
+let hasSapServiceLayerSession = false;
 
 export async function fetchBusinessPartnerByCardCode(cardCode) {
   const normalizedCardCode = cardCode.trim();
@@ -20,18 +22,7 @@ export async function fetchBusinessPartnerByCardCode(cardCode) {
     throw new Error('Enter a card code.');
   }
 
-  const loginResponse = await fetch('/b1s/v1/Login', {
-    method: 'POST',
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(SAP_LOGIN_PAYLOAD),
-  });
-
-  if (!loginResponse.ok) {
-    throw new Error('Unable to connect to SAP Business One.');
-  }
+  await loginToSapServiceLayer();
 
   const select = [
     'CardCode',
@@ -50,15 +41,8 @@ export async function fetchBusinessPartnerByCardCode(cardCode) {
     'BPAddresses',
   ].join(',');
   const filter = encodeURIComponent(`CardCode eq '${normalizedCardCode}'`);
-  const partnerResponse = await fetch(
+  const partnerResponse = await fetchAuthenticatedServiceLayerRequest(
     `/b1s/v1/BusinessPartners?$select=${select}&$filter=${filter}`,
-    {
-      method: 'GET',
-      credentials: 'include',
-      headers: {
-        Accept: 'application/json',
-      },
-    },
   );
 
   if (!partnerResponse.ok) {
@@ -152,15 +136,8 @@ export async function fetchRecentOrdersByCardCode(cardCode) {
     'DocDate',
   ].join(',');
   const filter = encodeURIComponent(`CardCode eq '${normalizedCardCode}'`);
-  const response = await fetch(
+  const response = await fetchAuthenticatedServiceLayerRequest(
     `/b1s/v1/Orders?$select=${select}&$filter=${filter}&$orderby=DocEntry desc&$top=5`,
-    {
-      method: 'GET',
-      credentials: 'include',
-      headers: {
-        Accept: 'application/json',
-      },
-    },
   );
 
   if (!response.ok) {
@@ -243,12 +220,7 @@ export async function fetchOrdersByCardCode(cardCode, options = {}) {
   });
 
   const requestUrl = `/b1s/v1/Orders?${query.toString()}`;
-  let response = await fetchServiceLayerRequest(requestUrl);
-
-  if (response.status === 401 || response.status === 403) {
-    await loginToSapServiceLayer();
-    response = await fetchServiceLayerRequest(requestUrl);
-  }
+  const response = await fetchAuthenticatedServiceLayerRequest(requestUrl);
 
   if (!response.ok) {
     await throwIfSessionExpiredResponse(response);
@@ -310,12 +282,7 @@ export async function fetchOrderDetailsByDocNum(docNum) {
     $filter: `DocNum eq ${normalizedDocNum}`,
   });
   const requestUrl = `/b1s/v1/Orders?${query.toString()}`;
-  let response = await fetchServiceLayerRequest(requestUrl);
-
-  if (response.status === 401 || response.status === 403) {
-    await loginToSapServiceLayer();
-    response = await fetchServiceLayerRequest(requestUrl);
-  }
+  const response = await fetchAuthenticatedServiceLayerRequest(requestUrl);
 
   if (!response.ok) {
     await throwIfSessionExpiredResponse(response);
@@ -373,12 +340,7 @@ export async function fetchDeliveryNotesByCardCode(cardCode, options = {}) {
     $orderby: 'DocEntry desc',
   });
   const requestUrl = `/b1s/v1/DeliveryNotes?${query.toString()}`;
-  let response = await fetchServiceLayerRequest(requestUrl);
-
-  if (response.status === 401 || response.status === 403) {
-    await loginToSapServiceLayer();
-    response = await fetchServiceLayerRequest(requestUrl);
-  }
+  const response = await fetchAuthenticatedServiceLayerRequest(requestUrl);
 
   if (!response.ok) {
     await throwIfSessionExpiredResponse(response);
@@ -436,12 +398,7 @@ export async function fetchDeliveryNoteDetailsByDocNum(docNum) {
     $filter: `DocNum eq ${normalizedDocNum}`,
   });
   const requestUrl = `/b1s/v1/DeliveryNotes?${query.toString()}`;
-  let response = await fetchServiceLayerRequest(requestUrl);
-
-  if (response.status === 401 || response.status === 403) {
-    await loginToSapServiceLayer();
-    response = await fetchServiceLayerRequest(requestUrl);
-  }
+  const response = await fetchAuthenticatedServiceLayerRequest(requestUrl);
 
   if (!response.ok) {
     await throwIfSessionExpiredResponse(response);
@@ -508,12 +465,7 @@ export async function fetchInvoicesByCardCode(cardCode, options = {}) {
     $orderby: 'DocEntry desc',
   });
   const requestUrl = `/b1s/v1/Invoices?${query.toString()}`;
-  let response = await fetchServiceLayerRequest(requestUrl);
-
-  if (response.status === 401 || response.status === 403) {
-    await loginToSapServiceLayer();
-    response = await fetchServiceLayerRequest(requestUrl);
-  }
+  const response = await fetchAuthenticatedServiceLayerRequest(requestUrl);
 
   if (!response.ok) {
     await throwIfSessionExpiredResponse(response);
@@ -577,12 +529,7 @@ export async function fetchInvoiceDetailsByDocNum(docNum) {
     $filter: `DocNum eq ${normalizedDocNum}`,
   });
   const requestUrl = `/b1s/v1/Invoices?${query.toString()}`;
-  let response = await fetchServiceLayerRequest(requestUrl);
-
-  if (response.status === 401 || response.status === 403) {
-    await loginToSapServiceLayer();
-    response = await fetchServiceLayerRequest(requestUrl);
-  }
+  const response = await fetchAuthenticatedServiceLayerRequest(requestUrl);
 
   if (!response.ok) {
     await throwIfSessionExpiredResponse(response);
@@ -601,23 +548,147 @@ export async function fetchInvoiceDetailsByDocNum(docNum) {
   return invoice;
 }
 
+export async function fetchCreditNotesByCardCode(cardCode, options = {}) {
+  const normalizedCardCode = cardCode.trim();
+
+  if (!normalizedCardCode) {
+    throw new Error('Enter a card code.');
+  }
+
+  const select = [
+    'CardCode',
+    'CardName',
+    'DocNum',
+    'DocEntry',
+    'DocDate',
+    'NumAtCard',
+    'DiscountPercent',
+    'TotalDiscount',
+    'VatSum',
+    'DocTotal',
+    'Comments',
+  ].join(',');
+  const filters = [
+    "Cancelled eq 'N'",
+    `CardCode eq '${escapeODataValue(normalizedCardCode)}'`,
+  ];
+
+  if (options.creditNoteNo) {
+    filters.push(`DocNum eq ${Number(options.creditNoteNo) || 0}`);
+  }
+
+  if (options.fromDate) {
+    filters.push(`DocDate ge '${options.fromDate}'`);
+  }
+
+  if (options.toDate) {
+    filters.push(`DocDate le '${options.toDate}'`);
+  }
+
+  const query = new URLSearchParams({
+    $select: select,
+    $filter: filters.join(' and '),
+    $orderby: 'DocEntry desc',
+  });
+  const requestUrl = `/b1s/v1/CreditNotes?${query.toString()}`;
+  const response = await fetchAuthenticatedServiceLayerRequest(requestUrl);
+
+  if (!response.ok) {
+    await throwIfSessionExpiredResponse(response);
+    throw new Error('Unable to load credit notes.');
+  }
+
+  const payload = await response.json();
+  throwIfSessionExpiredPayload(payload);
+
+  return Array.isArray(payload.value)
+    ? payload.value.map((creditNote) => ({
+      creditNoteNo: creditNote.DocNum,
+      docEntry: creditNote.DocEntry,
+      cardCode: creditNote.CardCode,
+      cardName: creditNote.CardName,
+      invoiceNo: creditNote.NumAtCard || '-',
+      date: creditNote.DocDate,
+      discountPercent: Number.parseFloat(creditNote.DiscountPercent) || 0,
+      totalDiscount: Number.parseFloat(creditNote.TotalDiscount) || 0,
+      tax: Number.parseFloat(creditNote.VatSum) || 0,
+      total: Number.parseFloat(creditNote.DocTotal) || 0,
+      comments: creditNote.Comments,
+    }))
+    : [];
+}
+
+export async function fetchCreditNoteDetailsByDocNum(docNum) {
+  const normalizedDocNum = Number(docNum);
+
+  if (!Number.isFinite(normalizedDocNum) || normalizedDocNum <= 0) {
+    throw new Error('Credit note number is missing.');
+  }
+
+  const query = new URLSearchParams({
+    $filter: `DocNum eq ${normalizedDocNum}`,
+  });
+  const requestUrl = `/b1s/v1/CreditNotes?${query.toString()}`;
+  const response = await fetchAuthenticatedServiceLayerRequest(requestUrl);
+
+  if (!response.ok) {
+    await throwIfSessionExpiredResponse(response);
+    throw new Error('Unable to load credit note details.');
+  }
+
+  const payload = await response.json();
+  throwIfSessionExpiredPayload(payload);
+
+  const creditNote = Array.isArray(payload.value) ? payload.value[0] : null;
+
+  if (!creditNote) {
+    throw new Error('Credit note details were not found.');
+  }
+
+  return creditNote;
+}
+
 function escapeODataValue(value) {
   return String(value).replaceAll("'", "''");
 }
 
 async function loginToSapServiceLayer() {
-  const loginResponse = await fetch('/b1s/v1/Login', {
-    method: 'POST',
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(SAP_LOGIN_PAYLOAD),
-  });
+  if (hasSapServiceLayerSession) {
+    return;
+  }
 
+  if (!sapServiceLayerLoginPromise) {
+    sapServiceLayerLoginPromise = fetch('/b1s/v1/Login', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(SAP_LOGIN_PAYLOAD),
+    }).finally(() => {
+      sapServiceLayerLoginPromise = null;
+    });
+  }
+
+  const loginResponse = await sapServiceLayerLoginPromise;
   if (!loginResponse.ok) {
     throw new Error('Unable to connect to SAP Business One.');
   }
+
+  hasSapServiceLayerSession = true;
+}
+
+async function fetchAuthenticatedServiceLayerRequest(requestUrl) {
+  await loginToSapServiceLayer();
+  let response = await fetchServiceLayerRequest(requestUrl);
+
+  if (response.status === 401 || response.status === 403) {
+    hasSapServiceLayerSession = false;
+    await loginToSapServiceLayer();
+    response = await fetchServiceLayerRequest(requestUrl);
+  }
+
+  return response;
 }
 
 function fetchServiceLayerRequest(requestUrl) {
@@ -722,15 +793,8 @@ export async function fetchOpenInvoicesCountByCardCode(cardCode) {
     'DocDueDate',
   ].join(',');
   const filter = encodeURIComponent(`CardCode eq '${normalizedCardCode}' and DocumentStatus eq 'bost_Open'`);
-  const invoiceResponse = await fetch(
+  const invoiceResponse = await fetchAuthenticatedServiceLayerRequest(
     `/b1s/v1/Invoices?$select=${select}&$filter=${filter}&$orderby=DocEntry desc`,
-    {
-      method: 'GET',
-      credentials: 'include',
-      headers: {
-        Accept: 'application/json',
-      },
-    },
   );
 
   if (!invoiceResponse.ok) {

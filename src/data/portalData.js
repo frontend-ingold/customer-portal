@@ -31,7 +31,6 @@ export const portalData = {
       ],
     },
     { label: 'Support / Contact Us', icon: 'support' },
-    { label: 'Downloads', icon: 'downloads' },
     { label: 'Logout', icon: 'logout' },
   ],
   salesItems: [
@@ -161,6 +160,15 @@ export const portalData = {
       dueAmount: '$0.00',
       status: 'Paid',
     },
+  ],
+  creditNotes: [
+    { creditNoteNo: '26500225', invoiceNo: '-', date: '2026-02-25', total: 309.4 },
+    { creditNoteNo: '26500137', invoiceNo: '-', date: '2026-09-02', total: 351.05 },
+    { creditNoteNo: '26500053', invoiceNo: '-', date: '2026-01-14', total: 79.65 },
+    { creditNoteNo: '25501229', invoiceNo: '-', date: '2025-05-12', total: 248.71 },
+    { creditNoteNo: '25501203', invoiceNo: '-', date: '2025-11-25', total: 14.6 },
+    { creditNoteNo: '25501110', invoiceNo: '-', date: '2025-10-11', total: 79.65 },
+    { creditNoteNo: '25500866', invoiceNo: '-', date: '2025-08-28', total: 36.84 },
   ],
   orderedProducts: [
     { name: 'Sardinia C36', sku: 'SAR-C36', amount: '$620.00', orderedOn: 'May 17, 2025', tone: 'tone-peach' },
